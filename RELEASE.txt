@@ -1,0 +1,4 @@
+Retail platform 0.4.1 — marketplace storefront update
+Built on platform 0.4.0. Includes source, setup, deployment files and tests.
+See docs/frontend/MARKETPLACE_UPDATE.md and VERIFICATION_0.4.1.md.
+Not certified production-ready; remaining gates are documented.

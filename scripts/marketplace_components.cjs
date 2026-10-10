@@ -1,0 +1,41 @@
+/* Targeted marketplace regression checks; browser visual QA is separate. */
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
+const {JSDOM}=require('jsdom');
+const dom=new JSDOM('<html><body><div id="root"></div></body></html>',{url:'http://localhost/en/shop?q=cable'});
+Object.assign(global,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
+const React=require('react'),{act}=React,{createRoot}=require('react-dom/client'),ts=require('typescript');
+const rootDir=path.resolve(__dirname,'..'),pushes=[],requests=[];
+const original=Module._resolveFilename;
+Module._resolveFilename=function(name,parent,...rest){if(name.startsWith('@shared/'))name=path.join(rootDir,'packages/ui',name.slice(8));if(name==='@i18n')name=path.join(rootDir,'packages/i18n/index.ts');return original.call(this,name,parent,...rest)};
+const oldLoad=Module._load;Module._load=function(name,...args){if(name==='next/link')return {__esModule:true,default:({children,...props})=>React.createElement('a',props,children)};if(name==='next/navigation')return {useRouter:()=>({push:url=>pushes.push(url)})};return oldLoad.call(this,name,...args)};
+for(const ext of ['.ts','.tsx'])require.extensions[ext]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText,f);
+const {brandTheme,MarketplaceHero}=require('../apps/storefront/src/components/Marketplace.tsx');
+const {HomeSections}=require('../apps/storefront/src/components/ShoppingTools.tsx');
+const Store=require('../apps/storefront/src/app/store.tsx').default;
+const cfg={business_name:'Test shop',business_name_ar:'متجر تجريبي',primary_color:'#ffe600',accent_color:'#e7e7ff',currency:'QAR'};
+const categories=[{id:'a',code:'cables',name:'Cables',name_ar:'كابلات'}];
+const products=[{id:'p',code:'cable',name:'Cable',name_ar:'كابل',category:categories[0],variants:[{id:'v',price:'35',sale_price:'30',available:4}]}];
+global.fetch=async u=>{let p=String(u).replace('/api/v1','');requests.push(p);let data=p==='/store/config'?cfg:p==='/store/categories'?categories:p==='/store/brands'?[]:p==='/store/homepage'?{sections:[],pages:[]}:p==='/cart'?{items:[]}:p==='/auth/session'?{}:p==='/store/bundles'?[]:p.startsWith('/store/products?')?{results:products,count:1,next_page:null}:null;if(data===null)throw Error('Unexpected fetch '+p);return new Response(JSON.stringify(data),{status:200})};
+const container=document.getElementById('root'),root=createRoot(container);
+const render=async(C,p)=>act(async()=>root.render(React.createElement(C,p)));
+(async()=>{
+ assert.equal(brandTheme('#ffe600','#e7e7ff')['--on-brand'],'#000000');
+ assert.equal(brandTheme('#193b70','#ddeeff')['--on-brand'],'#ffffff');
+ assert.equal(brandTheme('invalid','invalid')['--primary'],'#ffe600');
+ await render(MarketplaceHero,{section:{title:'Hero',properties:{image_url:'javascript:alert(1)'}},products,locale:'en'});assert(!container.querySelector('img'));assert.equal(container.querySelector('a').getAttribute('href'),'/en/shop');
+ await render(HomeSections,{sections:[{kind:'text',title:'First'},{kind:'categories',title:'Categories'},{kind:'featured_products',title:'Last'}],products,categories,brands:[],locale:'ar',cards:()=>React.createElement('div',null,'Products')});
+ assert.deepEqual([...container.querySelectorAll('h2')].map(n=>n.textContent),['First','Categories','Last']);assert(container.querySelector('a[href="/ar/shop?category=cables"]'));assert(container.textContent.includes('كابلات'));
+ const props={route:['en','shop'],initialConfig:cfg,initialProducts:products,initialCategories:categories,initialFilters:{q:'cable',category:'cables',brand:''}};
+ await render(Store,props);await act(async()=>new Promise(r=>setTimeout(r,320)));
+ assert.equal(container.querySelector('.searchbox input').value,'cable');assert(requests.some(p=>p.includes('q=cable')&&p.includes('category=cables')));
+ assert(container.querySelector('.product-image .pill').textContent.includes('14%'));assert.equal(container.style.color,'');
+ assert(container.querySelector('.category-menu a[href="/en/shop?category=cables"]'));
+ assert(container.querySelector('a[href^="/ar/shop?"]').href.includes('q=cable'));
+ // Enter a new query and ensure submit preserves it in a reloadable URL.
+ await act(async()=>{const input=container.querySelector('.searchbox input');Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(input,'controller');input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
+ await act(async()=>container.querySelector('.searchbox').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));
+ assert.equal(pushes.at(-1),'/en/shop?q=controller');
+ await render(Store,{...props,initialFilters:{q:'new query',category:'',brand:''}});await act(async()=>new Promise(r=>setTimeout(r,320)));assert.equal(container.querySelector('.searchbox input').value,'new query');assert(requests.some(p=>p.includes('q=new+query')));
+ await render(Store,{...props,route:['ar','shop']});assert.equal(document.documentElement.dir,'rtl');assert(container.textContent.includes('كل الفئات'));
+ await act(async()=>root.unmount());dom.window.close();console.log('PASS: brand contrast, safe hero media, CMS order, localized category links, URL-backed search/input/submit, same-route query changes, sale percentage, Arabic direction.');
+})().catch(e=>{console.error(e);process.exitCode=1;dom.window.close()});

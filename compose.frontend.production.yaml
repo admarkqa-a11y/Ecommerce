@@ -1,0 +1,42 @@
+# Overlay on compose.production.yaml, using the same private network.
+services:
+  storefront:
+    image: ${STOREFRONT_IMAGE:?Use an immutable storefront image digest}
+    environment:
+      API_ORIGIN: http://api:8000
+      API_HTTPS_TERMINATED: 'true'
+      INDEXABLE: ${INDEXABLE:-false}
+      HOSTNAME: 0.0.0.0
+      PORT: '3000'
+    networks: [private]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: [api]
+  admin:
+    image: ${ADMIN_IMAGE:?Use an immutable admin image digest}
+    environment:
+      API_ORIGIN: http://api:8000
+      API_HTTPS_TERMINATED: 'true'
+      HOSTNAME: 0.0.0.0
+      PORT: '3000'
+    networks: [private]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: [api]
+  proxy:
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?}
+      STOREFRONT_DOMAIN: ${STOREFRONT_DOMAIN:?}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?}
+      TLS_EMAIL: ${TLS_EMAIL:?}
+    volumes:
+      - ./deployment/full.Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - proxy_config:/config
+    depends_on: [api, storefront, admin]

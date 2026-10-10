@@ -1,0 +1,120 @@
+{
+  "settings": {
+    "business_name": "Vertex",
+    "business_name_ar": "فيرتكس",
+    "tagline": "Play your way. Discover your next favourite.",
+    "tagline_ar": "اكتشف منتجاتك المفضلة واستمتع بطريقتك.",
+    "primary_color": "#FFE600",
+    "accent_color": "#E7E7FF",
+    "whatsapp": "97400000001"
+  },
+  "hero": {
+    "title": "Big play. Everyday value.",
+    "title_ar": "متعة أكبر. قيمة كل يوم.",
+    "body": "Thoughtful tech. Everyday essentials. Find the little upgrades that make a big difference.",
+    "body_ar": "تقنيات مختارة وأساسيات يومية تحدث فرقاً."
+  },
+  "brand": [
+    "demo-audio",
+    "Demo Audio",
+    "صوت تجريبي"
+  ],
+  "categories": [
+    [
+      "gaming",
+      "Gaming",
+      "الألعاب",
+      null
+    ],
+    [
+      "controllers",
+      "Controllers",
+      "وحدات التحكم",
+      "gaming"
+    ],
+    [
+      "accessories",
+      "Accessories",
+      "الملحقات",
+      null
+    ],
+    [
+      "cables",
+      "Cables",
+      "الكابلات",
+      "accessories"
+    ]
+  ],
+  "attrs": [
+    [
+      "color",
+      "Color",
+      "اللون",
+      "single_select",
+      true,
+      [
+        "black",
+        "white"
+      ]
+    ],
+    [
+      "connection",
+      "Connection",
+      "التوصيل",
+      "single_select",
+      true,
+      [
+        "wired",
+        "wireless"
+      ]
+    ],
+    [
+      "compatibility",
+      "Compatibility",
+      "التوافق",
+      "multi_select",
+      false,
+      [
+        "pc",
+        "console"
+      ]
+    ],
+    [
+      "cable_length",
+      "Cable length",
+      "طول الكابل",
+      "number",
+      false,
+      []
+    ]
+  ],
+  "delivery_fee": "15",
+  "free_threshold": "250",
+  "sections": [
+    {
+      "kind": "categories",
+      "title": "Shop by category",
+      "title_ar": "تسوق حسب الفئة",
+      "position": 3
+    },
+    {
+      "kind": "promotion",
+      "title": "Discover your next upgrade",
+      "title_ar": "اكتشف اختيارك القادم",
+      "body": "Browse the latest offers from our catalog.",
+      "body_ar": "تصفح أحدث العروض من مجموعتنا.",
+      "position": 5
+    },
+    {
+      "kind": "text",
+      "title": "Your everyday essentials",
+      "title_ar": "أساسياتك اليومية",
+      "body": "Explore accessories for your everyday setup.",
+      "body_ar": "اكتشف الملحقات التي تناسب احتياجاتك اليومية.",
+      "position": 6,
+      "properties": {
+        "layout": "compact"
+      }
+    }
+  ]
+}

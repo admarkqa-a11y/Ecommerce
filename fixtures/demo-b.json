@@ -1,0 +1,98 @@
+{
+  "settings": {
+    "business_name": "Current",
+    "business_name_ar": "كارنت",
+    "tagline": "Essentials for every bright idea.",
+    "tagline_ar": "أساسيات لكل فكرة مشرقة.",
+    "primary_color": "#314E79",
+    "accent_color": "#E0E9F7",
+    "whatsapp": "97400000002"
+  },
+  "hero": {
+    "title": "Small details. Brighter spaces.",
+    "title_ar": "تفاصيل صغيرة. مساحات أكثر إشراقاً.",
+    "body": "Discover dependable lighting and electrical essentials, selected for the spaces you care about.",
+    "body_ar": "اكتشف الإضاءة والمستلزمات الكهربائية لمساحاتك المفضلة."
+  },
+  "brand": [
+    "demo-electric",
+    "Demo Electric",
+    "كهرباء تجريبية"
+  ],
+  "categories": [
+    [
+      "lighting",
+      "Lighting",
+      "الإضاءة",
+      null
+    ],
+    [
+      "bulbs",
+      "Bulbs",
+      "المصابيح",
+      "lighting"
+    ],
+    [
+      "electrical",
+      "Electrical",
+      "الكهربائيات",
+      null
+    ],
+    [
+      "switches",
+      "Switches",
+      "المفاتيح",
+      "electrical"
+    ]
+  ],
+  "attrs": [
+    [
+      "wattage",
+      "Wattage",
+      "القدرة",
+      "number",
+      false,
+      []
+    ],
+    [
+      "voltage",
+      "Voltage",
+      "الجهد",
+      "number",
+      false,
+      []
+    ],
+    [
+      "material",
+      "Material",
+      "المادة",
+      "text",
+      false,
+      []
+    ],
+    [
+      "light_color",
+      "Light color",
+      "لون الضوء",
+      "single_select",
+      true,
+      [
+        "warm",
+        "cool"
+      ]
+    ],
+    [
+      "socket_type",
+      "Socket type",
+      "نوع القاعدة",
+      "single_select",
+      true,
+      [
+        "e27",
+        "b22"
+      ]
+    ]
+  ],
+  "delivery_fee": "25",
+  "free_threshold": "400"
+}

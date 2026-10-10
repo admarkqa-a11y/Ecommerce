@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/.next
+**/__pycache__
+**/*.sqlite3
+**/.pytest_cache
+.env
+**/.env
+**/.env.*
+**/*.dump
+**/*.backup
+client-deployments
+**/media
+**/*.tsbuildinfo

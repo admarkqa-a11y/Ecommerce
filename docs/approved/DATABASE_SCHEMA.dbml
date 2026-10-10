@@ -1,0 +1,2048 @@
+// Version 1 logical ERD — design only, not executable migrations.
+// All IDs are UUID; timestamps UTC. No tenant_id: one isolated database per deployment.
+// All FK delete behavior is RESTRICT unless an implementation migration explicitly proves safe draft cleanup.
+// See DATABASE_ERD.md and specification for partial indexes, checks and transaction invariants.
+Project retail_v1 {
+  database_type: "PostgreSQL"
+  Note: "Reusable master; tax disabled; immutable commerce histories."
+}
+
+Table user {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  email varchar(255) [not null]
+  normalized_email varchar(255) [not null]
+  password_hash text
+  status varchar(255) [not null]
+  email_verified_at timestamptz
+  last_login_at timestamptz
+  indexes {
+    normalized_email [unique]
+  }
+  Note: "One shared identity model; no raw password/OTP/MFA secrets."
+}
+
+Table customer_profile {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  user_id uuid [not null]
+  display_name varchar(255) [not null]
+  phone varchar(255)
+  locale varchar(255) [not null]
+  reporting_identity_hash varchar(255) [not null]
+  indexes {
+    user_id [unique]
+  }
+}
+
+Table staff_profile {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  user_id uuid [not null]
+  display_name varchar(255) [not null]
+  status varchar(255) [not null]
+  mfa_required boolean [not null]
+  indexes {
+    user_id [unique]
+  }
+}
+
+Table role {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  name varchar(255) [not null]
+  is_system boolean [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table permission {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  description text [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table staff_role {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  staff_id uuid [not null]
+  role_id uuid [not null]
+  indexes {
+    (staff_id, role_id) [unique]
+  }
+}
+
+Table role_permission {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  role_id uuid [not null]
+  permission_id uuid [not null]
+  indexes {
+    (role_id, permission_id) [unique]
+  }
+}
+
+Table staff_invitation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  email varchar(255) [not null]
+  token_hash varchar(255) [not null]
+  expires_at timestamptz [not null]
+  accepted_at timestamptz
+  revoked_at timestamptz
+  invited_by uuid [not null]
+}
+
+Table invitation_role {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  invitation_id uuid [not null]
+  role_id uuid [not null]
+  indexes {
+    (invitation_id, role_id) [unique]
+  }
+}
+
+Table external_identity {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  user_id uuid [not null]
+  provider varchar(255) [not null]
+  subject varchar(255) [not null]
+  indexes {
+    (provider, subject) [unique]
+  }
+}
+
+Table auth_challenge {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  user_id uuid
+  email_hash varchar(255) [not null]
+  purpose varchar(255) [not null]
+  token_hash varchar(255) [not null]
+  expires_at timestamptz [not null]
+  used_at timestamptz
+  attempt_count integer [not null]
+  audience varchar(255) [not null]
+}
+
+Table auth_session {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  user_id uuid [not null]
+  token_hash varchar(255) [not null]
+  audience varchar(255) [not null]
+  expires_at timestamptz [not null]
+  last_seen_at timestamptz [not null]
+  revoked_at timestamptz
+  mfa_verified_at timestamptz
+  indexes {
+    token_hash [unique]
+  }
+  Note: "Logical session contract; may map to Django/session/MFA framework tables."
+}
+
+Table mfa_device {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  staff_id uuid [not null]
+  encrypted_secret_ref varchar(255) [not null]
+  confirmed_at timestamptz
+  last_used_counter bigint
+}
+
+Table mfa_recovery_code {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  device_id uuid [not null]
+  code_hash varchar(255) [not null]
+  consumed_at timestamptz
+}
+
+Table guest_order_access {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  token_hash varchar(255) [not null]
+  expires_at timestamptz [not null]
+  revoked_at timestamptz
+  indexes {
+    token_hash [unique]
+  }
+}
+
+Table address {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  customer_id uuid [not null]
+  label varchar(255) [not null]
+  recipient varchar(255) [not null]
+  phone varchar(255) [not null]
+  country_code varchar(255) [not null]
+  city varchar(255) [not null]
+  area_id uuid
+  line1 text [not null]
+  line2 text
+  postal_code varchar(255)
+  is_default boolean [not null]
+}
+
+Table media_asset {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  storage_key varchar(255) [not null]
+  purpose varchar(255) [not null]
+  mime_type varchar(255) [not null]
+  byte_size bigint [not null]
+  checksum varchar(255) [not null]
+  status varchar(255) [not null]
+  uploaded_by uuid
+  alt_translations jsonb [not null]
+  indexes {
+    storage_key [unique]
+  }
+  Note: "Private staging/import/invoice/export assets require authorization; public merchandising assets are separately classified."
+}
+
+Table brand {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  status varchar(255) [not null]
+  logo_asset_id uuid
+  indexes {
+    code [unique]
+  }
+}
+
+Table category {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  parent_id uuid
+  status varchar(255) [not null]
+  image_asset_id uuid
+  indexes {
+    code [unique]
+  }
+  Note: "Acyclic parent tree; category code is stable; subcategory is a category with parent."
+}
+
+Table product {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  brand_id uuid
+  kind varchar(255) [not null]
+  status varchar(255) [not null]
+  featured boolean [not null]
+  new_arrival boolean [not null]
+  bestseller_override boolean [not null]
+  low_stock_threshold integer [not null]
+  version bigint [not null]
+  published_at timestamptz
+  indexes {
+    code [unique]
+  }
+  Note: "kind simple or variable. Cost/price/stock exist on sellable variants, not duplicated here."
+}
+
+Table product_category {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  category_id uuid [not null]
+  is_primary boolean [not null]
+  indexes {
+    (product_id, category_id) [unique]
+  }
+  Note: "Partial unique index product_id WHERE is_primary; at least one primary before publish."
+}
+
+Table tag {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table product_tag {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  tag_id uuid [not null]
+  indexes {
+    (product_id, tag_id) [unique]
+  }
+}
+
+Table product_relation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  related_product_id uuid [not null]
+  kind varchar(255) [not null]
+  position integer [not null]
+  indexes {
+    (product_id, related_product_id, kind) [unique]
+  }
+  Note: "No self relation; kind related/cross_sell/upsell."
+}
+
+Table collection {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  status varchar(255) [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table collection_product {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  collection_id uuid [not null]
+  product_id uuid [not null]
+  position integer [not null]
+  indexes {
+    (collection_id, product_id) [unique]
+  }
+}
+
+Table product_image {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  asset_id uuid [not null]
+  position integer [not null]
+  is_primary boolean [not null]
+  indexes {
+    (product_id, asset_id) [unique]
+  }
+  Note: "At most one primary image per product via partial unique index."
+}
+
+Table catalog_publication {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  resource_kind varchar(255) [not null]
+  resource_id uuid [not null]
+  revision bigint [not null]
+  snapshot jsonb [not null]
+  published_at timestamptz [not null]
+  is_current boolean [not null]
+  indexes {
+    (resource_kind, resource_id, revision) [unique]
+  }
+  Note: "Validated immutable public snapshot; partial unique resource kind/ID WHERE is_current. Product snapshot includes variant publication metadata, not mutable stock."
+}
+
+Table attribute_definition {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  data_type varchar(255) [not null]
+  unit varchar(255)
+  filterable boolean [not null]
+  searchable boolean [not null]
+  comparable boolean [not null]
+  variant_eligible boolean [not null]
+  validation jsonb [not null]
+  status varchar(255) [not null]
+  indexes {
+    code [unique]
+  }
+  Note: "data_type text/long_text/number/boolean/date/single_select/multi_select; type changes blocked when values exist."
+}
+
+Table attribute_option {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  attribute_id uuid [not null]
+  code varchar(255) [not null]
+  position integer [not null]
+  status varchar(255) [not null]
+  indexes {
+    (attribute_id, code) [unique]
+  }
+}
+
+Table attribute_set {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  name varchar(255) [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table attribute_set_member {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  set_id uuid [not null]
+  attribute_id uuid [not null]
+  required boolean [not null]
+  position integer [not null]
+  indexes {
+    (set_id, attribute_id) [unique]
+  }
+}
+
+Table category_attribute_set {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  category_id uuid [not null]
+  set_id uuid [not null]
+  indexes {
+    (category_id, set_id) [unique]
+  }
+}
+
+Table product_attribute_set {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  set_id uuid [not null]
+  indexes {
+    (product_id, set_id) [unique]
+  }
+}
+
+Table product_attribute_value {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  attribute_id uuid [not null]
+  text_value text
+  number_value numeric(24,8)
+  boolean_value boolean
+  date_value date
+  indexes {
+    (product_id, attribute_id) [unique]
+  }
+  Note: "Exactly one typed scalar populated, matching definition; selection types use product_attribute_selection instead."
+}
+
+Table product_attribute_value_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  value_id uuid [not null]
+  locale varchar(255) [not null]
+  text_value text [not null]
+  indexes {
+    (value_id, locale) [unique]
+  }
+  Note: "Localized descriptive text only; numeric values never translated strings."
+}
+
+Table product_attribute_selection {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  attribute_id uuid [not null]
+  option_id uuid [not null]
+  indexes {
+    (product_id, attribute_id, option_id) [unique]
+  }
+  Note: "Composite validation option belongs to attribute; single-select permits exactly one selection."
+}
+
+Table product_variant_axis {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  attribute_id uuid [not null]
+  position integer [not null]
+  indexes {
+    (product_id, attribute_id) [unique]
+  }
+  Note: "Only single-select variant-eligible definitions."
+}
+
+Table product_variant_allowed_option {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  axis_id uuid [not null]
+  option_id uuid [not null]
+  indexes {
+    (axis_id, option_id) [unique]
+  }
+  Note: "Option belongs to axis attribute."
+}
+
+Table variant {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  sku varchar(255) [not null]
+  barcode varchar(255)
+  combination_key varchar(255) [not null]
+  price numeric(20,6) [not null]
+  sale_price numeric(20,6)
+  cost_price numeric(20,6)
+  status varchar(255) [not null]
+  version bigint [not null]
+  indexes {
+    sku [unique]
+    (product_id, combination_key) [unique]
+  }
+  Note: "SKU immutable via CSV; sale_price 0 <= sale_price < price; costs private; simple variant key empty."
+}
+
+Table variant_option {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  variant_id uuid [not null]
+  axis_id uuid [not null]
+  option_id uuid [not null]
+  indexes {
+    (variant_id, axis_id) [unique]
+  }
+  Note: "Axis belongs to variant product; option is allowed for axis; every active axis exactly once."
+}
+
+Table variant_image {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  variant_id uuid [not null]
+  asset_id uuid [not null]
+  position integer [not null]
+  indexes {
+    (variant_id, asset_id) [unique]
+  }
+}
+
+Table inventory_balance {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  variant_id uuid [not null]
+  on_hand integer [not null]
+  reserved integer [not null]
+  committed integer [not null]
+  threshold_override integer
+  version bigint [not null]
+  indexes {
+    variant_id [unique]
+  }
+  Note: "All quantities nonnegative; reserved + committed <= on_hand; no warehouse ID in V1."
+}
+
+Table stock_reservation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_item_id uuid [not null]
+  quantity integer [not null]
+  state varchar(255) [not null]
+  expires_at timestamptz
+  committed_at timestamptz
+  departed_at timestamptz
+  indexes {
+    order_item_id [unique]
+  }
+  Note: "state reserved/committed/departed/released; no partial fulfillment in V1."
+}
+
+Table stock_movement {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  variant_id uuid [not null]
+  order_item_id uuid
+  import_job_id uuid
+  operation_key varchar(255) [not null]
+  kind varchar(255) [not null]
+  on_hand_delta integer [not null]
+  reserved_delta integer [not null]
+  committed_delta integer [not null]
+  reason text [not null]
+  actor_id uuid
+  indexes {
+    operation_key [unique]
+  }
+  Note: "Append-only; unique operation prevents retry deductions; balances changed in same transaction."
+}
+
+Table restock {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  actor_id uuid [not null]
+  reason text [not null]
+  operation_key varchar(255) [not null]
+  indexes {
+    operation_key [unique]
+  }
+}
+
+Table restock_item {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  restock_id uuid [not null]
+  order_item_id uuid [not null]
+  quantity integer [not null]
+  movement_id uuid [not null]
+  indexes {
+    (restock_id, order_item_id) [unique]
+  }
+  Note: "Cumulative restock <= physically departed quantity."
+}
+
+Table wishlist {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  customer_id uuid [not null]
+  indexes {
+    customer_id [unique]
+  }
+}
+
+Table wishlist_item {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  wishlist_id uuid [not null]
+  product_id uuid [not null]
+  indexes {
+    (wishlist_id, product_id) [unique]
+  }
+}
+
+Table review {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  customer_id uuid [not null]
+  product_id uuid [not null]
+  order_item_id uuid [not null]
+  rating integer [not null]
+  body text [not null]
+  status varchar(255) [not null]
+  moderator_id uuid
+  moderation_reason text
+  indexes {
+    (customer_id, product_id) [unique]
+  }
+  Note: "Rating 1..5; verified delivered/collected purchase; only approved reviews in aggregates."
+}
+
+Table shopping_session {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  token_hash varchar(255) [not null]
+  started_at timestamptz [not null]
+  last_seen_at timestamptz [not null]
+  qualified_at timestamptz
+  consent_state varchar(255) [not null]
+  excluded_reason varchar(255)
+  indexes {
+    token_hash [unique]
+  }
+}
+
+Table cart {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  customer_id uuid
+  guest_token_hash varchar(255)
+  currency varchar(255) [not null]
+  version bigint [not null]
+  coupon_id uuid
+  session_id uuid
+  expires_at timestamptz [not null]
+  status varchar(255) [not null]
+}
+
+Table cart_bundle {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  cart_id uuid [not null]
+  promotion_id uuid [not null]
+  quantity integer [not null]
+  configuration_snapshot jsonb [not null]
+}
+
+Table cart_item {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  cart_id uuid [not null]
+  variant_id uuid [not null]
+  quantity integer [not null]
+  bundle_id uuid
+  Note: "Unique cart/variant/bundle using nulls-not-distinct semantics; whole positive quantities."
+}
+
+Table checkout_quote {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  cart_id uuid [not null]
+  cart_version bigint [not null]
+  settings_revision bigint [not null]
+  quote_hash varchar(255) [not null]
+  currency varchar(255) [not null]
+  expires_at timestamptz [not null]
+  totals jsonb [not null]
+  allocations jsonb [not null]
+  selected_delivery jsonb [not null]
+  calculation_version varchar(255) [not null]
+  indexes {
+    quote_hash [unique]
+  }
+}
+
+Table order_status_definition {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  internal_state varchar(255) [not null]
+  label_translations jsonb [not null]
+  enabled boolean [not null]
+  position integer [not null]
+  indexes {
+    code [unique]
+  }
+  Note: "Labels/substatuses only; state transition graph remains server policy."
+}
+
+Table sales_order {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  number varchar(255) [not null]
+  customer_id uuid
+  session_id uuid
+  reporting_identity_hash varchar(255) [not null]
+  quote_id uuid [not null]
+  status_id uuid [not null]
+  currency varchar(255) [not null]
+  currency_exponent integer [not null]
+  gross_merchandise numeric(20,6) [not null]
+  discount_total numeric(20,6) [not null]
+  net_merchandise numeric(20,6) [not null]
+  delivery_fee numeric(20,6) [not null]
+  tax_total numeric(20,6) [not null]
+  grand_total numeric(20,6) [not null]
+  payment_method varchar(255) [not null]
+  contact_snapshot jsonb [not null]
+  business_snapshot jsonb [not null]
+  delivery_snapshot jsonb [not null]
+  locale varchar(255) [not null]
+  policy_acceptance jsonb [not null]
+  placed_at timestamptz [not null]
+  accepted_at timestamptz
+  cancelled_at timestamptz
+  version bigint [not null]
+  indexes {
+    number [unique]
+  }
+  Note: "Money and identity snapshots immutable after placement; zero tax; lifecycle updates audited."
+}
+
+Table order_address_snapshot {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  kind varchar(255) [not null]
+  payload jsonb [not null]
+  indexes {
+    (order_id, kind) [unique]
+  }
+  Note: "Billing/shipping addresses frozen; no mutable address FK."
+}
+
+Table order_item {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  variant_id uuid [not null]
+  product_name text [not null]
+  sku_snapshot varchar(255) [not null]
+  variant_options jsonb [not null]
+  quantity integer [not null]
+  list_unit_price numeric(20,6) [not null]
+  discount_total numeric(20,6) [not null]
+  net_total numeric(20,6) [not null]
+  tax_total numeric(20,6) [not null]
+  brand_snapshot jsonb [not null]
+  category_snapshot jsonb [not null]
+  image_snapshot jsonb [not null]
+  bundle_key varchar(255)
+  unit_allocations jsonb [not null]
+  Note: "Unit allocations retain deterministic minor-unit remainders for partial refunds; product/category/brand data frozen."
+}
+
+Table order_adjustment {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  order_item_id uuid
+  promotion_id uuid
+  kind varchar(255) [not null]
+  amount numeric(20,6) [not null]
+  calculation_snapshot jsonb [not null]
+  Note: "Discount allocations link to optional promotion; tax zero and shipping tracked separately; not arbitrary financial editing."
+}
+
+Table order_history {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  from_state varchar(255)
+  to_state varchar(255) [not null]
+  action varchar(255) [not null]
+  actor_id uuid
+  reason text
+  operation_key varchar(255) [not null]
+  indexes {
+    operation_key [unique]
+  }
+}
+
+Table order_note {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  actor_id uuid [not null]
+  body text [not null]
+}
+
+Table fulfillment {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  method_id uuid [not null]
+  pickup_location_id uuid
+  state varchar(255) [not null]
+  tracking_reference varchar(255)
+  departed_at timestamptz
+  completed_at timestamptz
+  indexes {
+    order_id [unique]
+  }
+  Note: "One fulfillment contains all order items in V1; no partial shipments."
+}
+
+Table payment_attempt {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  integration_id uuid
+  method varchar(255) [not null]
+  merchant_reference varchar(255) [not null]
+  provider_reference varchar(255)
+  status varchar(255) [not null]
+  amount numeric(20,6) [not null]
+  currency varchar(255) [not null]
+  expires_at timestamptz
+  idempotency_key varchar(255) [not null]
+  failure_code varchar(255)
+  indexes {
+    merchant_reference [unique]
+    idempotency_key [unique]
+  }
+  Note: "At most one active card attempt per order via partial index; unknown remains active until reconciled."
+}
+
+Table payment_transaction {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  attempt_id uuid [not null]
+  kind varchar(255) [not null]
+  amount numeric(20,6) [not null]
+  currency varchar(255) [not null]
+  provider_reference varchar(255)
+  operation_key varchar(255) [not null]
+  occurred_at timestamptz [not null]
+  evidence_reference varchar(255)
+  verified_by uuid
+  indexes {
+    operation_key [unique]
+  }
+  Note: "Immutable capture/collection facts; external reference unique within integration/provider where supplied."
+}
+
+Table payment_webhook_event {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  integration_id uuid [not null]
+  event_key varchar(255) [not null]
+  body_hash varchar(255) [not null]
+  normalized_payload jsonb [not null]
+  received_at timestamptz [not null]
+  processed_at timestamptz
+  processing_state varchar(255) [not null]
+  indexes {
+    (integration_id, event_key) [unique]
+  }
+  Note: "Raw sensitive payload retention minimized/encrypted separately if required; verified event only."
+}
+
+Table payment_exception {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  attempt_id uuid [not null]
+  code varchar(255) [not null]
+  status varchar(255) [not null]
+  resolution varchar(255)
+  resolved_by uuid
+  resolved_at timestamptz
+}
+
+Table refund {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  capture_id uuid [not null]
+  status varchar(255) [not null]
+  amount numeric(20,6) [not null]
+  delivery_amount numeric(20,6) [not null]
+  currency varchar(255) [not null]
+  reason text [not null]
+  idempotency_key varchar(255) [not null]
+  provider_reference varchar(255)
+  requested_by uuid [not null]
+  confirmed_by uuid
+  external_reference varchar(255)
+  completed_at timestamptz
+  indexes {
+    idempotency_key [unique]
+  }
+  Note: "Amount reserved against capture while pending/unknown; successful + held <= captured; one capture source per refund."
+}
+
+Table refund_item {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  refund_id uuid [not null]
+  order_item_id uuid [not null]
+  quantity integer
+  amount numeric(20,6) [not null]
+  unit_allocation_snapshot jsonb [not null]
+  indexes {
+    (refund_id, order_item_id) [unique]
+  }
+  Note: "Amount-only goodwill refunds allowed only with explicit reason and net-paid allocation; no implied stock return."
+}
+
+Table refund_history {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  refund_id uuid [not null]
+  from_state varchar(255)
+  to_state varchar(255) [not null]
+  actor_id uuid
+  evidence jsonb [not null]
+  operation_key varchar(255) [not null]
+  indexes {
+    operation_key [unique]
+  }
+}
+
+Table delivery_zone {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  name_translations jsonb [not null]
+  enabled boolean [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table delivery_area {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  zone_id uuid [not null]
+  code varchar(255) [not null]
+  name_translations jsonb [not null]
+  enabled boolean [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table delivery_method {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  kind varchar(255) [not null]
+  name_translations jsonb [not null]
+  enabled boolean [not null]
+  schedule jsonb [not null]
+  published_revision bigint [not null]
+  indexes {
+    code [unique]
+  }
+  Note: "kind standard/express/same_day/pickup; schedule includes timezone, weekdays, cutoff, blackouts."
+}
+
+Table delivery_rule {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  method_id uuid [not null]
+  zone_id uuid
+  area_id uuid
+  min_order numeric(20,6) [not null]
+  lower_bound numeric(20,6) [not null]
+  upper_bound numeric(20,6)
+  fee numeric(20,6) [not null]
+  free_threshold numeric(20,6)
+  revision bigint [not null]
+  published boolean [not null]
+  Note: "At most one specificity target; areas imply zone; nonoverlapping bands per method/target/revision; area > zone > fallback."
+}
+
+Table pickup_location {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  name_translations jsonb [not null]
+  address jsonb [not null]
+  instructions_translations jsonb [not null]
+  availability jsonb [not null]
+  enabled boolean [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table promotion {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  kind varchar(255) [not null]
+  status varchar(255) [not null]
+  priority integer [not null]
+  currency varchar(255) [not null]
+  starts_at timestamptz [not null]
+  ends_at timestamptz
+  min_spend numeric(20,6)
+  max_discount numeric(20,6)
+  global_limit integer
+  per_customer_limit integer
+  max_applications integer [not null]
+  rule_version bigint [not null]
+  indexes {
+    code [unique]
+  }
+  Note: "kind product/category/brand/flash/deal/bundle/bxgy/coupon; no unlimited stacking flag."
+}
+
+Table promotion_target {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  promotion_id uuid [not null]
+  product_id uuid
+  category_id uuid
+  brand_id uuid
+  variant_id uuid
+  customer_id uuid
+  target_role varchar(255) [not null]
+  Note: "Exactly one target FK populated; role eligible/qualifier/reward/customer; typed rules validate combinations."
+}
+
+Table promotion_condition {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  promotion_id uuid [not null]
+  kind varchar(255) [not null]
+  parameters jsonb [not null]
+  Note: "Only schema-defined minimum quantity/customer/scope conditions; no scripts."
+}
+
+Table promotion_benefit {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  promotion_id uuid [not null]
+  kind varchar(255) [not null]
+  parameters jsonb [not null]
+  Note: "Typed percentage/fixed/fixed_bundle/bxgy; explicit maximum and allocation policy."
+}
+
+Table bundle_component {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  promotion_id uuid [not null]
+  variant_id uuid [not null]
+  quantity integer [not null]
+  indexes {
+    (promotion_id, variant_id) [unique]
+  }
+  Note: "Only bundle-kind promotions; no nested bundles."
+}
+
+Table coupon {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  promotion_id uuid [not null]
+  code varchar(255) [not null]
+  normalized_code varchar(255) [not null]
+  enabled boolean [not null]
+  indexes {
+    normalized_code [unique]
+  }
+  Note: "Only coupon-kind promotion; one applied coupon/cart."
+}
+
+Table promotion_redemption {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  promotion_id uuid [not null]
+  coupon_id uuid
+  order_id uuid [not null]
+  customer_id uuid
+  state varchar(255) [not null]
+  expires_at timestamptz
+  application_count integer [not null]
+  indexes {
+    (promotion_id, order_id) [unique]
+  }
+  Note: "state held/committed/released; atomic usage accounting; accepted cancellation does not restore usage."
+}
+
+Table page {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  kind varchar(255) [not null]
+  status varchar(255) [not null]
+  starts_at timestamptz
+  ends_at timestamptz
+  revision bigint [not null]
+  published_revision_id uuid
+  indexes {
+    code [unique]
+  }
+  Note: "CMS includes about/contact/FAQ and policy pages; typed body structure and translations."
+}
+
+Table banner {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  asset_id uuid [not null]
+  status varchar(255) [not null]
+  starts_at timestamptz
+  ends_at timestamptz
+  revision bigint [not null]
+  published_revision_id uuid
+  indexes {
+    code [unique]
+  }
+}
+
+Table homepage_section {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  type varchar(255) [not null]
+  position integer [not null]
+  enabled boolean [not null]
+  starts_at timestamptz
+  ends_at timestamptz
+  draft_properties jsonb [not null]
+  published_properties jsonb
+  published_revision bigint
+  indexes {
+    code [unique]
+  }
+  Note: "Typed section registry; product/category/collection references validated; full homepage publish atomic."
+}
+
+Table navigation_menu {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  draft_items jsonb [not null]
+  published_items jsonb
+  revision bigint [not null]
+  indexes {
+    code [unique]
+  }
+  Note: "Bounded typed tree; approved URL protocols; referenced content IDs validated."
+}
+
+Table blog_category {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  status varchar(255) [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table blog_tag {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  indexes {
+    code [unique]
+  }
+}
+
+Table blog_post {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  author_id uuid [not null]
+  image_id uuid
+  status varchar(255) [not null]
+  publish_at timestamptz
+  revision bigint [not null]
+  published_revision_id uuid
+  indexes {
+    code [unique]
+  }
+}
+
+Table blog_post_category {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  post_id uuid [not null]
+  category_id uuid [not null]
+  indexes {
+    (post_id, category_id) [unique]
+  }
+}
+
+Table blog_post_tag {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  post_id uuid [not null]
+  tag_id uuid [not null]
+  indexes {
+    (post_id, tag_id) [unique]
+  }
+}
+
+Table content_revision {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  resource_kind varchar(255) [not null]
+  resource_id uuid [not null]
+  revision bigint [not null]
+  snapshot jsonb [not null]
+  actor_id uuid [not null]
+  indexes {
+    (resource_kind, resource_id, revision) [unique]
+  }
+  Note: "Polymorphic audit snapshot, not an operational catalog FK; allowlisted kinds."
+}
+
+Table url_redirect {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  locale varchar(255) [not null]
+  old_path varchar(255) [not null]
+  new_path varchar(255) [not null]
+  status_code integer [not null]
+  indexes {
+    (locale, old_path) [unique]
+  }
+  Note: "No loops/external arbitrary targets; permanent slug history."
+}
+
+Table business_profile {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  singleton boolean [not null]
+  identity jsonb [not null]
+  contacts jsonb [not null]
+  logo_id uuid
+  favicon_id uuid
+  version bigint [not null]
+  indexes {
+    singleton [unique]
+  }
+  Note: "singleton must be true; initial row empty until configured."
+}
+
+Table store_settings {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  singleton boolean [not null]
+  currency varchar(255) [not null]
+  currency_exponent integer [not null]
+  timezone varchar(255) [not null]
+  default_locale varchar(255) [not null]
+  enabled_locales jsonb [not null]
+  tax_mode varchar(255) [not null]
+  policies jsonb [not null]
+  version bigint [not null]
+  indexes {
+    singleton [unique]
+  }
+  Note: "singleton true; tax_mode disabled only in V1; currency frozen after commerce history."
+}
+
+Table theme_settings {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  singleton boolean [not null]
+  tokens jsonb [not null]
+  website jsonb [not null]
+  seo jsonb [not null]
+  version bigint [not null]
+  indexes {
+    singleton [unique]
+  }
+  Note: "Validated contrast-aware tokens and public SEO; no arbitrary JS."
+}
+
+Table settings_revision {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  group_code varchar(255) [not null]
+  revision bigint [not null]
+  snapshot jsonb [not null]
+  actor_id uuid [not null]
+  published_at timestamptz
+  indexes {
+    (group_code, revision) [unique]
+  }
+  Note: "Redacted nonsecret values; restoring cannot change historical currency or payment facts."
+}
+
+Table integration_config {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  provider_code varchar(255) [not null]
+  environment varchar(255) [not null]
+  enabled boolean [not null]
+  public_options jsonb [not null]
+  secret_reference varchar(255)
+  version bigint [not null]
+  indexes {
+    code [unique]
+  }
+  Note: "Only registered adapters enabled; separate client-owned secret storage."
+}
+
+Table notification_template {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  code varchar(255) [not null]
+  locale varchar(255) [not null]
+  subject text [not null]
+  body text [not null]
+  version bigint [not null]
+  indexes {
+    (code, locale) [unique]
+  }
+  Note: "Restricted placeholders; no arbitrary template code execution."
+}
+
+Table notification {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  event_id uuid
+  template_id uuid
+  order_id uuid
+  recipient_encrypted text [not null]
+  payload jsonb [not null]
+  status varchar(255) [not null]
+  dedupe_key varchar(255) [not null]
+  indexes {
+    dedupe_key [unique]
+  }
+}
+
+Table notification_attempt {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  notification_id uuid [not null]
+  provider_reference varchar(255)
+  status varchar(255) [not null]
+  failure_code varchar(255)
+  attempted_at timestamptz [not null]
+}
+
+Table outbox_event {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  event_type varchar(255) [not null]
+  aggregate_type varchar(255) [not null]
+  aggregate_id uuid [not null]
+  payload jsonb [not null]
+  event_version integer [not null]
+  published_at timestamptz
+  dedupe_key varchar(255) [not null]
+  indexes {
+    dedupe_key [unique]
+  }
+  Note: "Written in source transaction; at-least-once publishing."
+}
+
+Table consumer_receipt {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  event_id uuid [not null]
+  consumer_code varchar(255) [not null]
+  processed_at timestamptz [not null]
+  indexes {
+    (event_id, consumer_code) [unique]
+  }
+}
+
+Table analytics_event {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  event_key varchar(255) [not null]
+  kind varchar(255) [not null]
+  session_id uuid
+  order_id uuid
+  product_id uuid
+  variant_id uuid
+  occurred_at timestamptz [not null]
+  received_at timestamptz [not null]
+  source varchar(255) [not null]
+  properties jsonb [not null]
+  schema_version integer [not null]
+  indexes {
+    event_key [unique]
+  }
+  Note: "Partial unique order_id WHERE kind=purchase; no PII; immutable deduplicated facts."
+}
+
+Table daily_metric {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  local_date date [not null]
+  metric_code varchar(255) [not null]
+  dimension_key varchar(255) [not null]
+  value numeric(24,8) [not null]
+  revision bigint [not null]
+  indexes {
+    (local_date, metric_code, dimension_key) [unique]
+  }
+  Note: "Rebuildable projection; no authority over finance."
+}
+
+Table invoice {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  order_id uuid [not null]
+  number varchar(255) [not null]
+  issued_at timestamptz [not null]
+  snapshot jsonb [not null]
+  asset_id uuid
+  status varchar(255) [not null]
+  indexes {
+    order_id [unique]
+    number [unique]
+  }
+  Note: "Invoice issued on order acceptance; clearly records payment status at issue, including unpaid COD. Immutable snapshot; later payment ledger shown separately."
+}
+
+Table refund_document {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  refund_id uuid [not null]
+  number varchar(255) [not null]
+  issued_at timestamptz [not null]
+  snapshot jsonb [not null]
+  asset_id uuid
+  status varchar(255) [not null]
+  indexes {
+    refund_id [unique]
+    number [unique]
+  }
+}
+
+Table audit_log {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  actor_id uuid
+  action varchar(255) [not null]
+  resource_kind varchar(255) [not null]
+  resource_id uuid
+  request_id varchar(255) [not null]
+  reason text
+  redacted_changes jsonb [not null]
+  occurred_at timestamptz [not null]
+  Note: "Append-only; no secret/OTP/card payloads."
+}
+
+Table import_job {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  actor_id uuid [not null]
+  source_asset_id uuid [not null]
+  file_hash varchar(255) [not null]
+  schema_version varchar(255) [not null]
+  mode varchar(255) [not null]
+  stock_mode varchar(255) [not null]
+  status varchar(255) [not null]
+  plan_hash varchar(255)
+  preview_revision bigint
+  confirmation_key varchar(255)
+  summary jsonb [not null]
+  Note: "confirmation_key unique when non-null; staged validation logs permitted even when domain commit rejects."
+}
+
+Table import_row {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  job_id uuid [not null]
+  row_number integer [not null]
+  normalized_data jsonb [not null]
+  errors jsonb [not null]
+  planned_changes jsonb [not null]
+  indexes {
+    (job_id, row_number) [unique]
+  }
+}
+
+Table import_asset {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  job_id uuid [not null]
+  source_url text [not null]
+  staged_asset_id uuid
+  status varchar(255) [not null]
+  error_code varchar(255)
+}
+
+Table export_job {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  actor_id uuid [not null]
+  kind varchar(255) [not null]
+  status varchar(255) [not null]
+  parameters jsonb [not null]
+  asset_id uuid
+  expires_at timestamptz [not null]
+}
+
+Table background_job {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  kind varchar(255) [not null]
+  resource_id uuid
+  status varchar(255) [not null]
+  attempts integer [not null]
+  dedupe_key varchar(255) [not null]
+  failure_code varchar(255)
+  last_attempt_at timestamptz
+  indexes {
+    dedupe_key [unique]
+  }
+  Note: "Allowlisted retry types; application job visibility, not arbitrary remote execution."
+}
+
+Table idempotency_record {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  audience varchar(255) [not null]
+  principal_key varchar(255) [not null]
+  operation varchar(255) [not null]
+  key varchar(255) [not null]
+  request_hash varchar(255) [not null]
+  response_snapshot jsonb [not null]
+  resource_id uuid
+  expires_at timestamptz
+  indexes {
+    (audience, principal_key, operation, key) [unique]
+  }
+  Note: "Financial operation uniqueness also enforced on domain rows; redact response secrets."
+}
+
+Table product_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  product_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  slug varchar(255) [not null]
+  description text
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  short_description text
+  indexes {
+    (product_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table category_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  category_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  slug varchar(255) [not null]
+  description text
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  indexes {
+    (category_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table brand_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  brand_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  slug varchar(255) [not null]
+  description text
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  indexes {
+    (brand_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table tag_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  tag_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  indexes {
+    (tag_id, locale) [unique]
+  }
+}
+
+Table collection_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  collection_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  slug varchar(255) [not null]
+  description text
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  indexes {
+    (collection_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table attribute_definition_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  attribute_definition_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  indexes {
+    (attribute_definition_id, locale) [unique]
+  }
+}
+
+Table attribute_option_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  attribute_option_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  indexes {
+    (attribute_option_id, locale) [unique]
+  }
+}
+
+Table blog_category_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  blog_category_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  slug varchar(255) [not null]
+  description text
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  indexes {
+    (blog_category_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table blog_tag_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  blog_tag_id uuid [not null]
+  locale varchar(255) [not null]
+  name varchar(255) [not null]
+  indexes {
+    (blog_tag_id, locale) [unique]
+  }
+}
+
+Table page_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  page_id uuid [not null]
+  locale varchar(255) [not null]
+  title varchar(255) [not null]
+  slug varchar(255) [not null]
+  body jsonb [not null]
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  indexes {
+    (page_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table blog_post_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  blog_post_id uuid [not null]
+  locale varchar(255) [not null]
+  title varchar(255) [not null]
+  slug varchar(255) [not null]
+  body jsonb [not null]
+  seo_title varchar(255)
+  meta_description text
+  og_asset_id uuid
+  indexes {
+    (blog_post_id, locale) [unique]
+    (locale, slug) [unique]
+  }
+}
+
+Table banner_translation {
+  id uuid [pk, not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+  banner_id uuid [not null]
+  locale varchar(255) [not null]
+  title varchar(255) [not null]
+  body text
+  target_url text
+  alt_text varchar(255) [not null]
+  indexes {
+    (banner_id, locale) [unique]
+  }
+}
+
+Ref: customer_profile.user_id > user.id [delete: restrict]
+Ref: staff_profile.user_id > user.id [delete: restrict]
+Ref: staff_role.staff_id > staff_profile.id [delete: restrict]
+Ref: staff_role.role_id > role.id [delete: restrict]
+Ref: role_permission.role_id > role.id [delete: restrict]
+Ref: role_permission.permission_id > permission.id [delete: restrict]
+Ref: staff_invitation.invited_by > staff_profile.id [delete: restrict]
+Ref: invitation_role.invitation_id > staff_invitation.id [delete: restrict]
+Ref: invitation_role.role_id > role.id [delete: restrict]
+Ref: external_identity.user_id > user.id [delete: restrict]
+Ref: auth_challenge.user_id > user.id [delete: restrict]
+Ref: auth_session.user_id > user.id [delete: restrict]
+Ref: mfa_device.staff_id > staff_profile.id [delete: restrict]
+Ref: mfa_recovery_code.device_id > mfa_device.id [delete: restrict]
+Ref: guest_order_access.order_id > sales_order.id [delete: restrict]
+Ref: address.customer_id > customer_profile.id [delete: restrict]
+Ref: address.area_id > delivery_area.id [delete: restrict]
+Ref: media_asset.uploaded_by > user.id [delete: restrict]
+Ref: brand.logo_asset_id > media_asset.id [delete: restrict]
+Ref: category.parent_id > category.id [delete: restrict]
+Ref: category.image_asset_id > media_asset.id [delete: restrict]
+Ref: product.brand_id > brand.id [delete: restrict]
+Ref: product_category.product_id > product.id [delete: restrict]
+Ref: product_category.category_id > category.id [delete: restrict]
+Ref: product_tag.product_id > product.id [delete: restrict]
+Ref: product_tag.tag_id > tag.id [delete: restrict]
+Ref: product_relation.product_id > product.id [delete: restrict]
+Ref: product_relation.related_product_id > product.id [delete: restrict]
+Ref: collection_product.collection_id > collection.id [delete: restrict]
+Ref: collection_product.product_id > product.id [delete: restrict]
+Ref: product_image.product_id > product.id [delete: restrict]
+Ref: product_image.asset_id > media_asset.id [delete: restrict]
+Ref: attribute_option.attribute_id > attribute_definition.id [delete: restrict]
+Ref: attribute_set_member.set_id > attribute_set.id [delete: restrict]
+Ref: attribute_set_member.attribute_id > attribute_definition.id [delete: restrict]
+Ref: category_attribute_set.category_id > category.id [delete: restrict]
+Ref: category_attribute_set.set_id > attribute_set.id [delete: restrict]
+Ref: product_attribute_set.product_id > product.id [delete: restrict]
+Ref: product_attribute_set.set_id > attribute_set.id [delete: restrict]
+Ref: product_attribute_value.product_id > product.id [delete: restrict]
+Ref: product_attribute_value.attribute_id > attribute_definition.id [delete: restrict]
+Ref: product_attribute_value_translation.value_id > product_attribute_value.id [delete: restrict]
+Ref: product_attribute_selection.product_id > product.id [delete: restrict]
+Ref: product_attribute_selection.attribute_id > attribute_definition.id [delete: restrict]
+Ref: product_attribute_selection.option_id > attribute_option.id [delete: restrict]
+Ref: product_variant_axis.product_id > product.id [delete: restrict]
+Ref: product_variant_axis.attribute_id > attribute_definition.id [delete: restrict]
+Ref: product_variant_allowed_option.axis_id > product_variant_axis.id [delete: restrict]
+Ref: product_variant_allowed_option.option_id > attribute_option.id [delete: restrict]
+Ref: variant.product_id > product.id [delete: restrict]
+Ref: variant_option.variant_id > variant.id [delete: restrict]
+Ref: variant_option.axis_id > product_variant_axis.id [delete: restrict]
+Ref: variant_option.option_id > attribute_option.id [delete: restrict]
+Ref: variant_image.variant_id > variant.id [delete: restrict]
+Ref: variant_image.asset_id > media_asset.id [delete: restrict]
+Ref: inventory_balance.variant_id > variant.id [delete: restrict]
+Ref: stock_reservation.order_item_id > order_item.id [delete: restrict]
+Ref: stock_movement.variant_id > variant.id [delete: restrict]
+Ref: stock_movement.order_item_id > order_item.id [delete: restrict]
+Ref: stock_movement.import_job_id > import_job.id [delete: restrict]
+Ref: stock_movement.actor_id > user.id [delete: restrict]
+Ref: restock.order_id > sales_order.id [delete: restrict]
+Ref: restock.actor_id > staff_profile.id [delete: restrict]
+Ref: restock_item.restock_id > restock.id [delete: restrict]
+Ref: restock_item.order_item_id > order_item.id [delete: restrict]
+Ref: restock_item.movement_id > stock_movement.id [delete: restrict]
+Ref: wishlist.customer_id > customer_profile.id [delete: restrict]
+Ref: wishlist_item.wishlist_id > wishlist.id [delete: restrict]
+Ref: wishlist_item.product_id > product.id [delete: restrict]
+Ref: review.customer_id > customer_profile.id [delete: restrict]
+Ref: review.product_id > product.id [delete: restrict]
+Ref: review.order_item_id > order_item.id [delete: restrict]
+Ref: review.moderator_id > staff_profile.id [delete: restrict]
+Ref: cart.customer_id > customer_profile.id [delete: restrict]
+Ref: cart.coupon_id > coupon.id [delete: restrict]
+Ref: cart.session_id > shopping_session.id [delete: restrict]
+Ref: cart_bundle.cart_id > cart.id [delete: restrict]
+Ref: cart_bundle.promotion_id > promotion.id [delete: restrict]
+Ref: cart_item.cart_id > cart.id [delete: restrict]
+Ref: cart_item.variant_id > variant.id [delete: restrict]
+Ref: cart_item.bundle_id > cart_bundle.id [delete: restrict]
+Ref: checkout_quote.cart_id > cart.id [delete: restrict]
+Ref: sales_order.customer_id > customer_profile.id [delete: restrict]
+Ref: sales_order.session_id > shopping_session.id [delete: restrict]
+Ref: sales_order.quote_id > checkout_quote.id [delete: restrict]
+Ref: sales_order.status_id > order_status_definition.id [delete: restrict]
+Ref: order_address_snapshot.order_id > sales_order.id [delete: restrict]
+Ref: order_item.order_id > sales_order.id [delete: restrict]
+Ref: order_item.variant_id > variant.id [delete: restrict]
+Ref: order_adjustment.order_id > sales_order.id [delete: restrict]
+Ref: order_adjustment.order_item_id > order_item.id [delete: restrict]
+Ref: order_adjustment.promotion_id > promotion.id [delete: restrict]
+Ref: order_history.order_id > sales_order.id [delete: restrict]
+Ref: order_history.actor_id > user.id [delete: restrict]
+Ref: order_note.order_id > sales_order.id [delete: restrict]
+Ref: order_note.actor_id > staff_profile.id [delete: restrict]
+Ref: fulfillment.order_id > sales_order.id [delete: restrict]
+Ref: fulfillment.method_id > delivery_method.id [delete: restrict]
+Ref: fulfillment.pickup_location_id > pickup_location.id [delete: restrict]
+Ref: payment_attempt.order_id > sales_order.id [delete: restrict]
+Ref: payment_attempt.integration_id > integration_config.id [delete: restrict]
+Ref: payment_transaction.attempt_id > payment_attempt.id [delete: restrict]
+Ref: payment_transaction.verified_by > staff_profile.id [delete: restrict]
+Ref: payment_webhook_event.integration_id > integration_config.id [delete: restrict]
+Ref: payment_exception.attempt_id > payment_attempt.id [delete: restrict]
+Ref: payment_exception.resolved_by > staff_profile.id [delete: restrict]
+Ref: refund.order_id > sales_order.id [delete: restrict]
+Ref: refund.capture_id > payment_transaction.id [delete: restrict]
+Ref: refund.requested_by > staff_profile.id [delete: restrict]
+Ref: refund.confirmed_by > staff_profile.id [delete: restrict]
+Ref: refund_item.refund_id > refund.id [delete: restrict]
+Ref: refund_item.order_item_id > order_item.id [delete: restrict]
+Ref: refund_history.refund_id > refund.id [delete: restrict]
+Ref: refund_history.actor_id > user.id [delete: restrict]
+Ref: delivery_area.zone_id > delivery_zone.id [delete: restrict]
+Ref: delivery_rule.method_id > delivery_method.id [delete: restrict]
+Ref: delivery_rule.zone_id > delivery_zone.id [delete: restrict]
+Ref: delivery_rule.area_id > delivery_area.id [delete: restrict]
+Ref: promotion_target.promotion_id > promotion.id [delete: restrict]
+Ref: promotion_target.product_id > product.id [delete: restrict]
+Ref: promotion_target.category_id > category.id [delete: restrict]
+Ref: promotion_target.brand_id > brand.id [delete: restrict]
+Ref: promotion_target.variant_id > variant.id [delete: restrict]
+Ref: promotion_target.customer_id > customer_profile.id [delete: restrict]
+Ref: promotion_condition.promotion_id > promotion.id [delete: restrict]
+Ref: promotion_benefit.promotion_id > promotion.id [delete: restrict]
+Ref: bundle_component.promotion_id > promotion.id [delete: restrict]
+Ref: bundle_component.variant_id > variant.id [delete: restrict]
+Ref: coupon.promotion_id > promotion.id [delete: restrict]
+Ref: promotion_redemption.promotion_id > promotion.id [delete: restrict]
+Ref: promotion_redemption.coupon_id > coupon.id [delete: restrict]
+Ref: promotion_redemption.order_id > sales_order.id [delete: restrict]
+Ref: promotion_redemption.customer_id > customer_profile.id [delete: restrict]
+Ref: page.published_revision_id > content_revision.id [delete: restrict]
+Ref: banner.asset_id > media_asset.id [delete: restrict]
+Ref: banner.published_revision_id > content_revision.id [delete: restrict]
+Ref: blog_post.author_id > user.id [delete: restrict]
+Ref: blog_post.image_id > media_asset.id [delete: restrict]
+Ref: blog_post.published_revision_id > content_revision.id [delete: restrict]
+Ref: blog_post_category.post_id > blog_post.id [delete: restrict]
+Ref: blog_post_category.category_id > blog_category.id [delete: restrict]
+Ref: blog_post_tag.post_id > blog_post.id [delete: restrict]
+Ref: blog_post_tag.tag_id > blog_tag.id [delete: restrict]
+Ref: content_revision.actor_id > staff_profile.id [delete: restrict]
+Ref: business_profile.logo_id > media_asset.id [delete: restrict]
+Ref: business_profile.favicon_id > media_asset.id [delete: restrict]
+Ref: settings_revision.actor_id > staff_profile.id [delete: restrict]
+Ref: notification.event_id > outbox_event.id [delete: restrict]
+Ref: notification.template_id > notification_template.id [delete: restrict]
+Ref: notification.order_id > sales_order.id [delete: restrict]
+Ref: notification_attempt.notification_id > notification.id [delete: restrict]
+Ref: consumer_receipt.event_id > outbox_event.id [delete: restrict]
+Ref: analytics_event.session_id > shopping_session.id [delete: restrict]
+Ref: analytics_event.order_id > sales_order.id [delete: restrict]
+Ref: analytics_event.product_id > product.id [delete: restrict]
+Ref: analytics_event.variant_id > variant.id [delete: restrict]
+Ref: invoice.order_id > sales_order.id [delete: restrict]
+Ref: invoice.asset_id > media_asset.id [delete: restrict]
+Ref: refund_document.refund_id > refund.id [delete: restrict]
+Ref: refund_document.asset_id > media_asset.id [delete: restrict]
+Ref: audit_log.actor_id > user.id [delete: restrict]
+Ref: import_job.actor_id > staff_profile.id [delete: restrict]
+Ref: import_job.source_asset_id > media_asset.id [delete: restrict]
+Ref: import_row.job_id > import_job.id [delete: restrict]
+Ref: import_asset.job_id > import_job.id [delete: restrict]
+Ref: import_asset.staged_asset_id > media_asset.id [delete: restrict]
+Ref: export_job.actor_id > staff_profile.id [delete: restrict]
+Ref: export_job.asset_id > media_asset.id [delete: restrict]
+Ref: product_translation.product_id > product.id [delete: restrict]
+Ref: product_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: category_translation.category_id > category.id [delete: restrict]
+Ref: category_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: brand_translation.brand_id > brand.id [delete: restrict]
+Ref: brand_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: tag_translation.tag_id > tag.id [delete: restrict]
+Ref: collection_translation.collection_id > collection.id [delete: restrict]
+Ref: collection_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: attribute_definition_translation.attribute_definition_id > attribute_definition.id [delete: restrict]
+Ref: attribute_option_translation.attribute_option_id > attribute_option.id [delete: restrict]
+Ref: blog_category_translation.blog_category_id > blog_category.id [delete: restrict]
+Ref: blog_category_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: blog_tag_translation.blog_tag_id > blog_tag.id [delete: restrict]
+Ref: page_translation.page_id > page.id [delete: restrict]
+Ref: page_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: blog_post_translation.blog_post_id > blog_post.id [delete: restrict]
+Ref: blog_post_translation.og_asset_id > media_asset.id [delete: restrict]
+Ref: banner_translation.banner_id > banner.id [delete: restrict]

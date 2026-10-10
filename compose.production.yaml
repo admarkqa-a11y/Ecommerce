@@ -1,0 +1,77 @@
+# Backend only. Build/push once; set RETAIL_IMAGE to one immutable image digest.
+name: ${COMPOSE_PROJECT_NAME:?Generate a separate client environment}
+x-api: &api
+  image: ${RETAIL_IMAGE:?Use registry/image@sha256:digest}
+  env_file: ${CLIENT_ENV_FILE:?Set the client environment path}
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  volumes: [media:/app/backend/media]
+  networks: [private]
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [queue:/data]
+    networks: [private]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      retries: 20
+  migrate:
+    <<: *api
+    restart: 'no'
+    command: [sh, -c, 'python manage.py migrate --noinput && python manage.py bootstrap']
+    depends_on:
+      db: {condition: service_healthy}
+  api:
+    <<: *api
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  worker:
+    <<: *api
+    command: [celery, -A, config, worker, --loglevel=warning]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  scheduler:
+    <<: *api
+    command: [celery, -A, config, beat, --loglevel=warning, --schedule=/tmp/celerybeat-schedule]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?}
+      TLS_EMAIL: ${TLS_EMAIL:?}
+    ports: ['80:80', '443:443']
+    volumes: ['./deployment/backend.Caddyfile:/etc/caddy/Caddyfile:ro', 'certificates:/data', 'proxy_config:/config']
+    networks: [private]
+    depends_on: [api]
+networks:
+  private:
+volumes:
+  database:
+  queue:
+  media:
+  certificates:
+  proxy_config:

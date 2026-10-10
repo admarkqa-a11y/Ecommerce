@@ -1,0 +1,31 @@
+{
+ email {$TLS_EMAIL}
+}
+{$API_DOMAIN} {
+ request_body {
+  max_size 11MB
+ }
+ reverse_proxy api:8000
+}
+{$STOREFRONT_DOMAIN} {
+ request_body {
+  max_size 11MB
+ }
+ handle /api/* {
+  reverse_proxy api:8000
+ }
+ handle {
+  reverse_proxy storefront:3000
+ }
+}
+{$ADMIN_DOMAIN} {
+ request_body {
+  max_size 11MB
+ }
+ handle /api/* {
+  reverse_proxy api:8000
+ }
+ handle {
+  reverse_proxy admin:3000
+ }
+}

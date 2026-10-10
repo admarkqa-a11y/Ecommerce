@@ -1,0 +1,19 @@
+{
+  "name": "retail-master",
+  "version": "0.4.1",
+  "private": true,
+  "workspaces": [
+    "apps/storefront",
+    "apps/admin"
+  ],
+  "scripts": {
+    "dev:storefront": "npm run dev --workspace @retail/storefront",
+    "dev:admin": "npm run dev --workspace @retail/admin",
+    "build": "npm run build --workspace @retail/storefront && npm run build --workspace @retail/admin",
+    "typecheck": "npm run typecheck --workspaces",
+    "test:frontend": "node scripts/frontend_components.cjs && node scripts/marketplace_components.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}
