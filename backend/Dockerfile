@@ -9,5 +9,5 @@ RUN mkdir -p /app/backend/media /app/backend/staticfiles && chown -R retail:reta
 USER retail
 WORKDIR /app/backend
 EXPOSE 8000
-CMD ["gunicorn","config.wsgi:application","--bind","0.0.0.0:8000","--workers","3","--timeout","60"]
+CMD ["sh", "-c", "export ALLOWED_HOSTS=\"$RENDER_EXTERNAL_HOSTNAME\"; python manage.py migrate --noinput && python manage.py bootstrap && exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 60"]
 
